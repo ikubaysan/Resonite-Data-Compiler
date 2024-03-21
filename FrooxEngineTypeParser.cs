@@ -1,5 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Reflection;
-using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Elements.Core;
 using FrooxEngine;
 using FrooxEngine.ProtoFlux;
@@ -8,157 +13,65 @@ internal class Program
 {
     private static async Task Main(string[] args)
     {
-        const char SEPARATOR = '#';
+        List<Type> protoFluxTypes = GetProtoFluxTypes();
+        Console.WriteLine($"Loaded {protoFluxTypes.Count} ProtoFlux types.");
 
-        static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
+        List<ProtoFluxTypeInfo> typeInfos = protoFluxTypes.Select(type => new ProtoFluxTypeInfo
+        {
+            FullName = type.FullName,
+            NiceName = type.GetNiceName()
+        }).ToList();
+
+        string json = JsonSerializer.Serialize(typeInfos, new JsonSerializerOptions { WriteIndented = true });
+
+        string outputFolder = args.Length > 0 ? args[0] : "../../../data/";
+        EnsureDirectoryExists(outputFolder);
+
+        string filePath = Path.Combine(outputFolder, "ProtoFluxTypes.json");
+        await File.WriteAllTextAsync(filePath, json);
+
+        Console.WriteLine($"ProtoFlux data saved to {filePath}");
+    }
+
+    private static List<Type> GetProtoFluxTypes()
+    {
+        IEnumerable<Assembly> assemblies = Directory
+            .GetFiles(Directory.GetCurrentDirectory())
+            .Where(file => file.EndsWith(".dll"))
+            .Select(Assembly.LoadFrom)
+            .ToList();
+
+        List<Type> allTypes = new List<Type>();
+
+        foreach (var assembly in assemblies)
         {
             try
             {
-                return assembly.GetTypes();
+                allTypes.AddRange(assembly.GetTypes().Where(type => typeof(ProtoFluxNode).IsAssignableFrom(type)));
             }
             catch (ReflectionTypeLoadException e)
             {
-                return e.Types.Where(t => t != null)!;
+                var loadableTypes = e.Types.Where(t => t != null && typeof(ProtoFluxNode).IsAssignableFrom(t));
+                allTypes.AddRange(loadableTypes);
             }
         }
 
-        IEnumerable<Assembly> asms = Directory
-            .GetFiles(Directory.GetCurrentDirectory())
-            .Where((s) => s.EndsWith(".dll") && !s.StartsWith("System"))
-            .Select(
-                (s) =>
-                {
-                    try
-                    {
-                        return Assembly.LoadFrom(s);
-                    }
-                    // For non C# dlls in the managed folder
-                    catch (BadImageFormatException) { }
-                    return null;
-                }
-            )
-            .Where((asm) => asm != null)!;
+        return allTypes.ToList();
+    }
 
-        Console.WriteLine($"Loaded {asms.Count()} assemblies.");
 
-        List<Type> allTypes = asms.SelectMany(GetLoadableTypes).ToList();
-
-        Console.WriteLine($"Loaded {allTypes.Count} types.");
-
-        WorkerInitializer.Initialize(allTypes, true);
-
-        StringBuilder componentsString = new();
-
-        void PrintComp(
-            Type element,
-            StringBuilder builder,
-            int depth,
-            HashSet<string> seenOverloads
-        )
-        {
-            if (typeof(ProtoFluxNode).IsAssignableFrom(element))
-            {
-                Type toPrint = element;
-                /*
-                if (ProtoFluxHelper.IsHidden(element)) return;
-                string overloadName = ProtoFluxHelper.GetOverloadName(element);
-                if (overloadName != null)
-                {
-                    if (seenOverloads.Add(overloadName))
-                    {
-                        toPrint = ProtoFluxHelper.GetMatchingOverload(overloadName, null, typeof(ComponentSelector).GetMethod("GetTypeRank", BindingFlags.NonPublic | BindingFlags.Static)?.CreateDelegate<Func<Type, int>>());
-                    }
-                    else
-                    {
-                        return;
-                    }
-                }
-                */
-                //builder.AppendLine(new string(SEPARATOR, depth + 1) + " " + ProtoFluxHelper.GetDisplayNode(toPrint).FullName + "@" + toPrint.GetNiceName() + SEPARATOR + toPrint.FullName);
-                _ = builder.AppendLine(
-                    new string(SEPARATOR, depth + 1)
-                        + " "
-                        + toPrint.GetNiceName()
-                        + SEPARATOR
-                        + toPrint.FullName
-                );
-                return;
-            }
-            _ = builder.AppendLine(
-                new string(SEPARATOR, depth + 1)
-                    + " "
-                    + element.GetNiceName()
-                    + SEPARATOR
-                    + element.FullName
-            );
-        }
-
-        void ProcessNode(CategoryNode<Type> node, StringBuilder builder, int depth)
-        {
-            _ = builder.AppendLine(new string(SEPARATOR, depth) + " " + node.Name);
-            foreach (CategoryNode<Type>? subdir in node.Subcategories)
-            {
-                ProcessNode(subdir, builder, depth + 1);
-            }
-            // the line below is only useful in logix mode
-            // but commenting it out will cause the PrintComp line to error since it requires that variable
-            HashSet<string> seenOverloads = new();
-            foreach (Type element in node.Elements)
-            {
-                PrintComp(element, builder, depth, seenOverloads);
-            }
-        }
-
-        foreach (CategoryNode<Type>? node in WorkerInitializer.ComponentLibrary.Subcategories)
-        {
-            if (node.Name == "ProtoFlux")
-            {
-                continue;
-            }
-
-            ProcessNode(node, componentsString, 0);
-        }
-
-        string outputFolder = (args.Length < 1) ? "../../../data/" : args[0];
-
-        // Get the directory name from the file path
-        string directoryName = Path.GetDirectoryName(outputFolder)!;
-
-        // Check if the directory exists, if not, create it
+    private static void EnsureDirectoryExists(string path)
+    {
+        string directoryName = Path.GetDirectoryName(path);
         if (!Directory.Exists(directoryName))
         {
-            _ = Directory.CreateDirectory(directoryName);
+            Directory.CreateDirectory(directoryName);
         }
-        // Writes our components list to a file.
-        await File.WriteAllTextAsync(
-            Path.Combine(outputFolder, "ComponentList.txt"),
-            componentsString.ToString()
-        );
-
-        StringBuilder ProtofluxString = new();
-        CategoryNode<Type> ProtofluxPath = WorkerInitializer.ComponentLibrary.GetSubcategory(
-            "ProtoFlux"
-        );
-        // .GetSubcategory("Runtimes")
-        // .GetSubcategory("Execution")
-        // .GetSubcategory("Nodes");
-
-
-        foreach (CategoryNode<Type>? node in ProtofluxPath.Subcategories)
-        {
-            ProcessNode(node, ProtofluxString, 0);
-        }
-
-        HashSet<string> seenOverloads = new();
-        foreach (Type? node in ProtofluxPath.Elements)
-        {
-            PrintComp(node, ProtofluxString, -1, seenOverloads);
-        }
-
-        // Writes our ProtoFlux list to a file.
-        await File.WriteAllTextAsync(
-            Path.Combine(outputFolder, "ProtoFluxList.txt"),
-            ProtofluxString.ToString()
-        );
     }
+}
+
+public class ProtoFluxTypeInfo
+{
+    public string FullName { get; set; }
+    public string NiceName { get; set; }
 }
