@@ -14,9 +14,16 @@ internal class Program
     private static async Task Main(string[] args)
     {
         IEnumerable<ProtoFluxTypeInfo> protoFluxTypes = GetProtoFluxTypesWithCategories();
-        Console.WriteLine($"Loaded {protoFluxTypes.Count()} ProtoFlux types.");
+        int protoFluxTypesCount = protoFluxTypes.Count();
+        Console.WriteLine($"Loaded {protoFluxTypesCount} ProtoFlux types.");
 
-        string json = JsonSerializer.Serialize(protoFluxTypes, new JsonSerializerOptions { WriteIndented = true });
+        var outputData = new
+        {
+            TranscriptionInfo = new { ProtoFluxTypesCount = protoFluxTypesCount },
+            ProtoFluxTypes = protoFluxTypes
+        };
+
+        string json = JsonSerializer.Serialize(outputData, new JsonSerializerOptions { WriteIndented = true });
 
         string outputFolder = args.Length > 0 ? args[0] : "../../../data/";
         EnsureDirectoryExists(outputFolder);
