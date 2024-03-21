@@ -96,45 +96,53 @@ public class ProtoFluxTypeInfo
 
     private List<string> GetWordsOfNiceName()
     {
-        var cleanName = NiceName.Split('<')[0]; // Remove generic type indicators
+        var cleanName = NiceName.Split('<')[0]; // Initial clean-up to remove generic type indicators.
 
-        // Enhanced Regex to split by uppercase letters following lowercase letters (for camel case),
-        // sequences of uppercase letters that may represent acronyms,
-        // underscores, and digits
+        // Define special cases directly with unique placeholders to ensure they are easily identifiable and uncommon enough to not accidentally match actual content.
+        var specialCases = new Dictionary<string, string>
+    {
+        { "NaN", "%%NaN%%" },
+        { "OwO", "%%OwO%%" }
+    };
+
+        // Replace special cases in the cleanName with their placeholders.
+        foreach (var specialCase in specialCases)
+        {
+            cleanName = cleanName.Replace(specialCase.Key, specialCase.Value);
+        }
+
+        // Enhanced Regex pattern to accurately split the cleanName into words, considering placeholders as separate tokens.
         var pattern = @"
-        (?:[A-Z][a-z]+)       # Matches words starting with uppercase letter followed by lowercase letters
-        |(?:[A-Z]+(?![a-z]))  # Matches uppercase acronyms or sequences of uppercase letters
-        |(?:\d+)              # Matches sequences of digits
-        |(?:_+)               # Matches underscores (to be removed)
+        (%%[^%]+%%)            # Matches placeholders for special cases
+        |([A-Z][a-z]+)         # Matches words starting with an uppercase letter followed by lowercase letters
+        |([A-Z]+(?![a-z]))     # Matches sequences of uppercase letters (acronyms)
+        |(\d+)                 # Matches sequences of digits
+        |(_+)                  # Matches underscores (to be removed)
     ";
 
         var words = System.Text.RegularExpressions.Regex.Matches(cleanName, pattern, System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace)
                     .Cast<System.Text.RegularExpressions.Match>()
-                    .Select(m => m.Value.Replace("_", "")) // Remove underscores
-                    .Where(word => !string.IsNullOrEmpty(word)) // Exclude empty strings
+                    .Select(m => m.Value.Replace("_", "")) // Removing underscores from matches.
                     .ToList();
 
-        // Split concatenated uppercase letters from preceding word if not at start
-        for (int i = 1; i < words.Count; i++)
+        // Process each word to replace any placeholders with their original values (the special cases).
+        for (int i = 0; i < words.Count; i++)
         {
-            // Check if the current word and the previous word are uppercase, indicating they should be split
-            if (words[i].All(char.IsUpper) && words[i - 1].Any(char.IsLower))
+            foreach (var specialCase in specialCases)
             {
-                var previousWord = words[i - 1];
-                var lastLowercaseIndex = previousWord.TakeWhile(c => !char.IsUpper(c)).Count() - 1;
-
-                // If the previous word ends with lowercase characters followed by uppercase (e.g., "ToUTF"),
-                // split it into separate words ("To", "UTF")
-                if (lastLowercaseIndex >= 0 && lastLowercaseIndex < (previousWord.Length - 1))
-                {
-                    words[i - 1] = previousWord.Substring(0, lastLowercaseIndex + 1); // Modify previous word to only contain the lowercase part
-                    words.Insert(i, previousWord.Substring(lastLowercaseIndex + 1)); // Insert the uppercase part as a new word
-                }
+                // Replace the placeholder with the original special case value.
+                words[i] = words[i].Replace(specialCase.Value, specialCase.Key);
             }
         }
 
-        return words;
+        // Filter out any empty entries that may have been introduced during processing.
+        return words.Where(word => !string.IsNullOrEmpty(word)).ToList();
     }
+
+
+
+
+
 
 
 }
