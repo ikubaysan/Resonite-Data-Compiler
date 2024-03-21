@@ -42,11 +42,11 @@ internal class Program
             IEnumerable<Type> types;
             try
             {
-                types = assembly.GetTypes().Where(type => typeof(ProtoFluxNode).IsAssignableFrom(type));
+                types = assembly.GetTypes().Where(type => typeof(ProtoFluxNode).IsAssignableFrom(type) && type.Namespace.StartsWith("FrooxEngine.ProtoFlux."));
             }
             catch (ReflectionTypeLoadException e)
             {
-                types = e.Types.Where(t => t != null && typeof(ProtoFluxNode).IsAssignableFrom(t));
+                types = e.Types.Where(t => t != null && typeof(ProtoFluxNode).IsAssignableFrom(t) && t.Namespace.StartsWith("FrooxEngine.ProtoFlux."));
             }
 
             protoFluxTypes.AddRange(types.Select(type => new ProtoFluxTypeInfo
