@@ -96,33 +96,46 @@ public class ProtoFluxTypeInfo
 
     private List<string> GetWordsOfNiceName()
     {
-        // Remove generic type indicators
-        var cleanName = NiceName.Split('<')[0];
+        var cleanName = NiceName.Split('<')[0]; // Remove generic type indicators
 
-        // Split by capital letters and underscores, then filter out any empty strings
-        var words = System.Text.RegularExpressions.Regex.Matches(cleanName, @"([A-Z][a-z0-9]+)|([A-Z]+(?![a-z]))|(_+)|(\d+)")
-                            .Cast<System.Text.RegularExpressions.Match>()
-                            .Select(m => m.Value.Replace("_", ""))
-                            .Where(word => !string.IsNullOrEmpty(word)) // Exclude empty strings
-                            .ToList();
+        // Enhanced Regex to split by uppercase letters following lowercase letters (for camel case),
+        // sequences of uppercase letters that may represent acronyms,
+        // underscores, and digits
+        var pattern = @"
+        (?:[A-Z][a-z]+)       # Matches words starting with uppercase letter followed by lowercase letters
+        |(?:[A-Z]+(?![a-z]))  # Matches uppercase acronyms or sequences of uppercase letters
+        |(?:\d+)              # Matches sequences of digits
+        |(?:_+)               # Matches underscores (to be removed)
+    ";
 
-        // Handle special cases, such as GUID being kept as a single word
-        // Additional special cases can be added as needed
-        for (int i = 0; i < words.Count; i++)
+        var words = System.Text.RegularExpressions.Regex.Matches(cleanName, pattern, System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace)
+                    .Cast<System.Text.RegularExpressions.Match>()
+                    .Select(m => m.Value.Replace("_", "")) // Remove underscores
+                    .Where(word => !string.IsNullOrEmpty(word)) // Exclude empty strings
+                    .ToList();
+
+        // Split concatenated uppercase letters from preceding word if not at start
+        for (int i = 1; i < words.Count; i++)
         {
-            if (words[i].All(char.IsDigit))
+            // Check if the current word and the previous word are uppercase, indicating they should be split
+            if (words[i].All(char.IsUpper) && words[i - 1].Any(char.IsLower))
             {
-                continue; // Skip pure numeric parts
-            }
-            if (i > 0 && words[i].All(char.IsUpper) && words[i - 1].All(char.IsLetter))
-            {
-                words[i - 1] += words[i]; // Merge acronyms with the preceding word
-                words.RemoveAt(i);
-                i--;
+                var previousWord = words[i - 1];
+                var lastLowercaseIndex = previousWord.TakeWhile(c => !char.IsUpper(c)).Count() - 1;
+
+                // If the previous word ends with lowercase characters followed by uppercase (e.g., "ToUTF"),
+                // split it into separate words ("To", "UTF")
+                if (lastLowercaseIndex >= 0 && lastLowercaseIndex < (previousWord.Length - 1))
+                {
+                    words[i - 1] = previousWord.Substring(0, lastLowercaseIndex + 1); // Modify previous word to only contain the lowercase part
+                    words.Insert(i, previousWord.Substring(lastLowercaseIndex + 1)); // Insert the uppercase part as a new word
+                }
             }
         }
+
         return words;
     }
+
 
 }
 
