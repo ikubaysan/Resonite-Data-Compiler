@@ -13,16 +13,10 @@ internal class Program
 {
     private static async Task Main(string[] args)
     {
-        List<Type> protoFluxTypes = GetProtoFluxTypes();
-        Console.WriteLine($"Loaded {protoFluxTypes.Count} ProtoFlux types.");
+        IEnumerable<ProtoFluxTypeInfo> protoFluxTypes = GetProtoFluxTypesWithCategories();
+        Console.WriteLine($"Loaded {protoFluxTypes.Count()} ProtoFlux types.");
 
-        List<ProtoFluxTypeInfo> typeInfos = protoFluxTypes.Select(type => new ProtoFluxTypeInfo
-        {
-            FullName = type.FullName,
-            NiceName = type.GetNiceName()
-        }).ToList();
-
-        string json = JsonSerializer.Serialize(typeInfos, new JsonSerializerOptions { WriteIndented = true });
+        string json = JsonSerializer.Serialize(protoFluxTypes, new JsonSerializerOptions { WriteIndented = true });
 
         string outputFolder = args.Length > 0 ? args[0] : "../../../data/";
         EnsureDirectoryExists(outputFolder);
@@ -33,32 +27,38 @@ internal class Program
         Console.WriteLine($"ProtoFlux data saved to {filePath}");
     }
 
-    private static List<Type> GetProtoFluxTypes()
+    private static IEnumerable<ProtoFluxTypeInfo> GetProtoFluxTypesWithCategories()
     {
         IEnumerable<Assembly> assemblies = Directory
             .GetFiles(Directory.GetCurrentDirectory())
             .Where(file => file.EndsWith(".dll"))
-            .Select(Assembly.LoadFrom)
-            .ToList();
+            .Select(Assembly.LoadFrom);
 
-        List<Type> allTypes = new List<Type>();
+        var protoFluxTypes = new List<ProtoFluxTypeInfo>();
 
         foreach (var assembly in assemblies)
         {
+            IEnumerable<Type> types;
             try
             {
-                allTypes.AddRange(assembly.GetTypes().Where(type => typeof(ProtoFluxNode).IsAssignableFrom(type)));
+                types = assembly.GetTypes().Where(type => typeof(ProtoFluxNode).IsAssignableFrom(type));
             }
             catch (ReflectionTypeLoadException e)
             {
-                var loadableTypes = e.Types.Where(t => t != null && typeof(ProtoFluxNode).IsAssignableFrom(t));
-                allTypes.AddRange(loadableTypes);
+                types = e.Types.Where(t => t != null && typeof(ProtoFluxNode).IsAssignableFrom(t));
             }
+
+            protoFluxTypes.AddRange(types.Select(type => new ProtoFluxTypeInfo
+            {
+                FullName = type.FullName,
+                NiceName = type.GetNiceName(),
+                FullCategory = type.Namespace,
+                NiceCategory = type.Namespace?.Replace("FrooxEngine.ProtoFlux.", "")
+            }));
         }
 
-        return allTypes.ToList();
+        return protoFluxTypes;
     }
-
 
     private static void EnsureDirectoryExists(string path)
     {
@@ -74,4 +74,6 @@ public class ProtoFluxTypeInfo
 {
     public string FullName { get; set; }
     public string NiceName { get; set; }
+    public string FullCategory { get; set; }
+    public string NiceCategory { get; set; }
 }
