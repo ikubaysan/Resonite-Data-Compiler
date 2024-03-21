@@ -17,7 +17,10 @@ internal class Program
         int protoFluxTypesCount = protoFluxTypes.Count();
         Console.WriteLine($"Loaded {protoFluxTypesCount} ProtoFlux types.");
 
-        string json = JsonSerializer.Serialize(protoFluxTypes, new JsonSerializerOptions { WriteIndented = true });
+        // Add support for serialization of complex types such as List<string>
+        var options = new JsonSerializerOptions { WriteIndented = true, IncludeFields = true };
+
+        string json = JsonSerializer.Serialize(protoFluxTypes, options);
 
         string outputFolder = args.Length > 0 ? args[0] : "../../../data/";
         EnsureDirectoryExists(outputFolder);
@@ -77,4 +80,49 @@ public class ProtoFluxTypeInfo
     public string NiceName { get; set; }
     public string FullCategory { get; set; }
     public string NiceCategory { get; set; }
+    public int ParameterCount => GetParameterCount();
+    public List<string> WordsOfNiceName => GetWordsOfNiceName();
+
+    private int GetParameterCount()
+    {
+        // Extract the number after the ` character if present
+        var match = System.Text.RegularExpressions.Regex.Match(FullName, @"`\d+");
+        if (match.Success)
+        {
+            return int.Parse(match.Value.Substring(1)); // skip the ` character and parse the number
+        }
+        return 0; // If no ` character is found, return 0
+    }
+
+    private List<string> GetWordsOfNiceName()
+    {
+        // Remove generic type indicators
+        var cleanName = NiceName.Split('<')[0];
+
+        // Split by capital letters and underscores, then filter out any empty strings
+        var words = System.Text.RegularExpressions.Regex.Matches(cleanName, @"([A-Z][a-z0-9]+)|([A-Z]+(?![a-z]))|(_+)|(\d+)")
+                            .Cast<System.Text.RegularExpressions.Match>()
+                            .Select(m => m.Value.Replace("_", ""))
+                            .Where(word => !string.IsNullOrEmpty(word)) // Exclude empty strings
+                            .ToList();
+
+        // Handle special cases, such as GUID being kept as a single word
+        // Additional special cases can be added as needed
+        for (int i = 0; i < words.Count; i++)
+        {
+            if (words[i].All(char.IsDigit))
+            {
+                continue; // Skip pure numeric parts
+            }
+            if (i > 0 && words[i].All(char.IsUpper) && words[i - 1].All(char.IsLetter))
+            {
+                words[i - 1] += words[i]; // Merge acronyms with the preceding word
+                words.RemoveAt(i);
+                i--;
+            }
+        }
+        return words;
+    }
+
 }
+
