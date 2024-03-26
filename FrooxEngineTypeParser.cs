@@ -96,48 +96,50 @@ public class ProtoFluxTypeInfo
 
     private List<string> GetWordsOfNiceName()
     {
-        var cleanName = NiceName.Split('<')[0]; // Initial clean-up to remove generic type indicators.
+        var cleanName = NiceName.Split('<')[0]; // Remove generic type indicators
 
-        // Define special cases directly with unique placeholders to ensure they are easily identifiable and uncommon enough to not accidentally match actual content.
+        // Define special cases with unique placeholders
         var specialCases = new Dictionary<string, string>
     {
         { "NaN", "%%NaN%%" },
         { "OwO", "%%OwO%%" }
     };
 
-        // Replace special cases in the cleanName with their placeholders.
-        foreach (var specialCase in specialCases)
+        // Temporarily replace special cases in the cleanName with placeholders
+        foreach (var kvp in specialCases)
         {
-            cleanName = cleanName.Replace(specialCase.Key, specialCase.Value);
+            cleanName = cleanName.Replace(kvp.Key, kvp.Value);
         }
 
-        // Enhanced Regex pattern to accurately split the cleanName into words, considering placeholders as separate tokens.
+        // Adjust the pattern to explicitly separate 'bool' and similar keywords followed by numbers, and ensure they're treated as distinct words
         var pattern = @"
-        (%%[^%]+%%)            # Matches placeholders for special cases
-        |([A-Z][a-z]+)         # Matches words starting with an uppercase letter followed by lowercase letters
-        |([A-Z]+(?![a-z]))     # Matches sequences of uppercase letters (acronyms)
-        |(\d+)                 # Matches sequences of digits
-        |(_+)                  # Matches underscores (to be removed)
+        (%%[^%]+%%)             # Matches placeholders for special cases
+        |(\bbool\b)(?=_|\d)     # Matches 'bool' as a whole word only when followed by an underscore or digit
+        |([A-Z][a-z]+)          # Matches words starting with uppercase letter followed by lowercase letters
+        |([A-Z]+(?![a-z]))      # Matches uppercase acronyms or sequences of uppercase letters
+        |(\d+)                  # Matches sequences of digits
+        |(_+)                   # Matches underscores (to be removed)
+        |([A-Z]?[a-z]+)         # Matches any lowercase words that may not start with an uppercase
+        |([A-Z])                # Matches single uppercase letters
     ";
 
         var words = System.Text.RegularExpressions.Regex.Matches(cleanName, pattern, System.Text.RegularExpressions.RegexOptions.IgnorePatternWhitespace)
                     .Cast<System.Text.RegularExpressions.Match>()
-                    .Select(m => m.Value.Replace("_", "")) // Removing underscores from matches.
+                    .Select(m => m.Value.Replace("_", "")) // Remove underscores
                     .ToList();
 
-        // Process each word to replace any placeholders with their original values (the special cases).
+        // Replace placeholders in the list with their original special cases
         for (int i = 0; i < words.Count; i++)
         {
-            foreach (var specialCase in specialCases)
+            foreach (var kvp in specialCases)
             {
-                // Replace the placeholder with the original special case value.
-                words[i] = words[i].Replace(specialCase.Value, specialCase.Key);
+                words[i] = words[i].Replace(kvp.Value, kvp.Key);
             }
         }
 
-        // Filter out any empty entries that may have been introduced during processing.
         return words.Where(word => !string.IsNullOrEmpty(word)).ToList();
     }
+
 
 
 
