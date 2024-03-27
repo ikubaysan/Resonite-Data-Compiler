@@ -129,7 +129,7 @@ public class ProtoFluxTypeProcessor
     private void AddProtoFluxTypeInfo(Type element, StringBuilder builder, int depth, HashSet<string> seenOverloads, string currentCategoryPath)
     {
         // Adjust the category path if it starts with a specific prefix, indicating it's part of the runtime execution path.
-        string adjustedCategoryPath = currentCategoryPath.StartsWith("Runtimes/Execution/") ? currentCategoryPath.Substring("Runtimes/Execution/".Length) : currentCategoryPath;
+        string adjustedCategoryPath = currentCategoryPath.StartsWith("Runtimes/Execution/Nodes/") ? currentCategoryPath.Substring("Runtimes/Execution/".Length) : currentCategoryPath;
 
         // Create a new ProtoFluxTypeInfo object for the element with adjusted category path.
         ProtoFluxTypeInfo protoFluxTypeInfo = CreateProtoFluxTypeInfo(element, adjustedCategoryPath);
