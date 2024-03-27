@@ -8,7 +8,6 @@ using System.Text.Json;
 internal class Program
 {
     const int MAX_PARAMETERS = 1;
-    const char SEPARATOR = '#';
 
     static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
     {
@@ -31,8 +30,7 @@ internal class Program
         }
     }
 
-    // Pass the current category path as an additional argument.
-    public static void PrintComp(List<ProtoFluxTypeInfo> protoFluxTypeInfoList, Type element, StringBuilder builder, int depth, HashSet<string> seenOverloads, string currentCategoryPath)
+    public static void AddProtoFluxTypeInfo(List<ProtoFluxTypeInfo> protoFluxTypeInfoList, Type element, StringBuilder builder, int depth, HashSet<string> seenOverloads, string currentCategoryPath)
     {
         // Adjust currentCategoryPath if it starts with "Runtimes/Execution/" - remove this prefix.
         string adjustedCategoryPath = currentCategoryPath.StartsWith("Runtimes/Execution/") ? currentCategoryPath.Substring("Runtimes/Execution/".Length) : currentCategoryPath;
@@ -41,16 +39,6 @@ internal class Program
         if (typeof(ProtoFluxNode).IsAssignableFrom(element))
         {
             Type toPrint = element;
-            _ = builder.AppendLine(
-                new string(SEPARATOR, depth + 1)
-                    + " "
-                    + toPrint.GetNiceName()
-                    + SEPARATOR
-                    + toPrint.FullName
-                    + SEPARATOR // Append the category path.
-                    + adjustedCategoryPath // Append the current category path here.
-            );
-
             protoFluxTypeInfo = new ProtoFluxTypeInfo
             {
                 FullName = toPrint.FullName,
@@ -63,15 +51,6 @@ internal class Program
 
             return;
         }
-        _ = builder.AppendLine(
-            new string(SEPARATOR, depth + 1)
-                + " "
-                + element.GetNiceName()
-                + SEPARATOR
-                + element.FullName
-                + SEPARATOR // Append the category path.
-                + adjustedCategoryPath // Append the current category path here.
-        );
 
         protoFluxTypeInfo = new ProtoFluxTypeInfo
         {
@@ -88,7 +67,6 @@ internal class Program
     public static void ProcessNode(List<ProtoFluxTypeInfo> protoFluxTypeInfoList, CategoryNode<Type> node, StringBuilder builder, int depth, string parentCategoryPath = "")
     {
         string currentCategoryPath = parentCategoryPath + (parentCategoryPath == "" ? "" : "/") + node.Name; // Build the current category path.
-        _ = builder.AppendLine(new string(SEPARATOR, depth) + " " + node.Name + SEPARATOR + currentCategoryPath); // Append the category path to the category line as well.
 
         foreach (CategoryNode<Type>? subdir in node.Subcategories)
         {
@@ -97,8 +75,8 @@ internal class Program
 
         HashSet<string> seenOverloads = new();
         foreach (Type element in node.Elements)
-        
-            PrintComp(protoFluxTypeInfoList, element, builder, depth, seenOverloads, currentCategoryPath);
+
+            AddProtoFluxTypeInfo(protoFluxTypeInfoList, element, builder, depth, seenOverloads, currentCategoryPath);
     }
 
     private static async Task Main(string[] args)
@@ -140,7 +118,7 @@ internal class Program
         HashSet<string> seenOverloads = new();
         foreach (Type? node in ProtofluxPath.Elements)
         {
-            PrintComp(protoFluxTypeInfoList, node, ProtofluxString, -1, seenOverloads, "ProtoFlux");
+            AddProtoFluxTypeInfo(protoFluxTypeInfoList, node, ProtofluxString, -1, seenOverloads, "ProtoFlux");
         }
 
         int protoFluxTypesCount = protoFluxTypeInfoList.Count();
