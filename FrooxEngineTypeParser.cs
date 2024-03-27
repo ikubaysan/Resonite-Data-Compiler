@@ -166,7 +166,7 @@ public class ProtoFluxTypeProcessor
         string json = JsonSerializer.Serialize(protoFluxTypeInfoList, options);
 
         // Determine the full path for the output JSON file.
-        string filePath = Path.Combine(outputFolder, "ProtoFluxTypes_new.json");
+        string filePath = Path.Combine(outputFolder, "ProtoFluxTypes.json");
 
         // Write the serialized JSON to the file, asynchronously.
         await File.WriteAllTextAsync(filePath, json);
