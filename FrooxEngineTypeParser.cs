@@ -193,6 +193,7 @@ public class ProtoFluxTypeInfo
     public string FullName { get; set; }
     public string NiceName { get; set; }
     public string NiceCategory { get; set; }
+    public string NicePath => $"{NiceCategory}/{NiceName}";
     public int ParameterCount => GetParameterCount();
     public List<string> WordsOfNiceName => GetWordsOfNiceName();
 
