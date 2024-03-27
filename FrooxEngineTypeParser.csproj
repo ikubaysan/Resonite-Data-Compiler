@@ -13,6 +13,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="FrooxEngineTypeParser.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="FrooxEngineTypeParser.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="Elements.Core">
       <HintPath>$(ResonitePath)Elements.Core.dll</HintPath>
     </Reference>
