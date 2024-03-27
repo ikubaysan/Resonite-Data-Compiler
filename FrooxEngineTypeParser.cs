@@ -21,6 +21,7 @@ internal class Program
 public class ProtoFluxTypeProcessor
 {
     private const int MAX_PARAMETERS = 1; // Max number of parameters to consider a type for processing.
+    const string REMOVE_CATEGORY_PREFIX = "Runtimes/Execution/Nodes/";
     private readonly List<ProtoFluxTypeInfo> protoFluxTypeInfoList = new(); // List to hold processed type information.
 
     // Retrieves loadable types from an assembly, handling exceptions gracefully.
@@ -128,8 +129,8 @@ public class ProtoFluxTypeProcessor
     // Adds information about a specific type to the list if it matches criteria for ProtoFlux types.
     private void AddProtoFluxTypeInfo(Type element, StringBuilder builder, int depth, HashSet<string> seenOverloads, string currentCategoryPath)
     {
-        // Adjust the category path if it starts with a specific prefix, indicating it's part of the runtime execution path.
-        string adjustedCategoryPath = currentCategoryPath.StartsWith("Runtimes/Execution/Nodes/") ? currentCategoryPath.Substring("Runtimes/Execution/Nodes/".Length) : currentCategoryPath;
+        // Adjust the category path if it starts with the defined prefix, indicating it's part of the runtime execution path.
+        string adjustedCategoryPath = currentCategoryPath.StartsWith(REMOVE_CATEGORY_PREFIX) ? currentCategoryPath.Substring(REMOVE_CATEGORY_PREFIX.Length) : currentCategoryPath;
 
         // Create a new ProtoFluxTypeInfo object for the element with adjusted category path.
         ProtoFluxTypeInfo protoFluxTypeInfo = CreateProtoFluxTypeInfo(element, adjustedCategoryPath);
@@ -140,6 +141,7 @@ public class ProtoFluxTypeProcessor
         // Add the type info object to the list for later serialization.
         protoFluxTypeInfoList.Add(protoFluxTypeInfo);
     }
+
 
     // Creates a ProtoFluxTypeInfo object from a Type, including its fully qualified name, a "nice" name, and its category.
     private ProtoFluxTypeInfo CreateProtoFluxTypeInfo(Type element, string adjustedCategoryPath)
