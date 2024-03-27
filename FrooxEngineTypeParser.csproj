@@ -13,11 +13,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="FrooxEngineTypeParser.cs" />
+    <Compile Remove="FrooxEngineTypeParser_Old.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="FrooxEngineTypeParser.cs" />
+    <None Include="FrooxEngineTypeParser_Old.cs" />
   </ItemGroup>
 
   <ItemGroup>
