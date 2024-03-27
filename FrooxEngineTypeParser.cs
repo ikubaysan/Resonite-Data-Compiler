@@ -7,9 +7,16 @@ using System.Text.Json;
 
 internal class Program
 {
-    const int MAX_PARAMETERS = 1;
+    private const int MAX_PARAMETERS = 1;
 
-    static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
+    private static async Task Main(string[] args)
+    {
+        ProtoFluxTypeProcessor processor = new ProtoFluxTypeProcessor();
+        processor.ProcessAssemblies();
+        await processor.SaveProtoFluxTypeInfo(args.Length > 0 ? args[0] : "../../../data/");
+    }
+
+    private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
     {
         try
         {
@@ -21,123 +28,119 @@ internal class Program
         }
     }
 
-    private static void EnsureDirectoryExists(string path)
+    private class ProtoFluxTypeProcessor
     {
-        string directoryName = Path.GetDirectoryName(path);
-        if (!Directory.Exists(directoryName))
+        private readonly List<ProtoFluxTypeInfo> protoFluxTypeInfoList = new();
+
+        public void ProcessAssemblies()
         {
-            Directory.CreateDirectory(directoryName);
-        }
-    }
+            IEnumerable<Assembly> assemblies = LoadAssemblies();
+            Console.WriteLine($"Loaded {assemblies.Count()} assemblies.");
 
-    public static void AddProtoFluxTypeInfo(List<ProtoFluxTypeInfo> protoFluxTypeInfoList, Type element, StringBuilder builder, int depth, HashSet<string> seenOverloads, string currentCategoryPath)
-    {
-        // Adjust currentCategoryPath if it starts with "Runtimes/Execution/" - remove this prefix.
-        string adjustedCategoryPath = currentCategoryPath.StartsWith("Runtimes/Execution/") ? currentCategoryPath.Substring("Runtimes/Execution/".Length) : currentCategoryPath;
-        ProtoFluxTypeInfo protoFluxTypeInfo;
+            List<Type> allTypes = assemblies.SelectMany(GetLoadableTypes).ToList();
+            Console.WriteLine($"Loaded {allTypes.Count} types.");
 
-        if (typeof(ProtoFluxNode).IsAssignableFrom(element))
-        {
-            Type toPrint = element;
-            protoFluxTypeInfo = new ProtoFluxTypeInfo
-            {
-                FullName = toPrint.FullName,
-                NiceName = toPrint.GetNiceName(),
-                NiceCategory = adjustedCategoryPath
-            };
+            WorkerInitializer.Initialize(allTypes, true);
 
-            if (protoFluxTypeInfo.ParameterCount > MAX_PARAMETERS) return;
-            protoFluxTypeInfoList.Add(protoFluxTypeInfo);
-
-            return;
+            ProcessProtoFluxTypes();
         }
 
-        protoFluxTypeInfo = new ProtoFluxTypeInfo
+        private IEnumerable<Assembly> LoadAssemblies()
         {
-            FullName = element.FullName,
-            NiceName = element.GetNiceName(),
-            NiceCategory = adjustedCategoryPath
-        };
-
-        if (protoFluxTypeInfo.ParameterCount > MAX_PARAMETERS) return;
-        protoFluxTypeInfoList.Add(protoFluxTypeInfo);
-
-    }
-
-    public static void ProcessNode(List<ProtoFluxTypeInfo> protoFluxTypeInfoList, CategoryNode<Type> node, StringBuilder builder, int depth, string parentCategoryPath = "")
-    {
-        string currentCategoryPath = parentCategoryPath + (parentCategoryPath == "" ? "" : "/") + node.Name; // Build the current category path.
-
-        foreach (CategoryNode<Type>? subdir in node.Subcategories)
-        {
-            ProcessNode(protoFluxTypeInfoList, subdir, builder, depth + 1, currentCategoryPath);
-        }
-
-        HashSet<string> seenOverloads = new();
-        foreach (Type element in node.Elements)
-
-            AddProtoFluxTypeInfo(protoFluxTypeInfoList, element, builder, depth, seenOverloads, currentCategoryPath);
-    }
-
-    private static async Task Main(string[] args)
-    {
-        List<ProtoFluxTypeInfo> protoFluxTypeInfoList = new List<ProtoFluxTypeInfo>();
-
-        IEnumerable<Assembly> asms = Directory
-            .GetFiles(Directory.GetCurrentDirectory())
-            .Where((s) => s.EndsWith(".dll") && !s.StartsWith("System"))
-            .Select(
-                (s) =>
+            return Directory
+                .GetFiles(Directory.GetCurrentDirectory(), "*.dll")
+                .Where(s => !s.StartsWith("System"))
+                .Select(s =>
                 {
                     try
                     {
                         return Assembly.LoadFrom(s);
                     }
-                    catch (BadImageFormatException) { }
-                    return null;
-                }
-            )
-            .Where((asm) => asm != null)!;
-
-        Console.WriteLine($"Loaded {asms.Count()} assemblies.");
-
-        List<Type> allTypes = asms.SelectMany(GetLoadableTypes).ToList();
-
-        Console.WriteLine($"Loaded {allTypes.Count} types.");
-
-        WorkerInitializer.Initialize(allTypes, true);
-
-        StringBuilder ProtofluxString = new();
-        CategoryNode<Type> ProtofluxPath = WorkerInitializer.ComponentLibrary.GetSubcategory("ProtoFlux");
-
-        foreach (CategoryNode<Type>? node in ProtofluxPath.Subcategories)
-        {
-            ProcessNode(protoFluxTypeInfoList, node, ProtofluxString, 0);
+                    catch (BadImageFormatException)
+                    {
+                        return null;
+                    }
+                })
+                .Where(asm => asm != null)!;
         }
 
-        HashSet<string> seenOverloads = new();
-        foreach (Type? node in ProtofluxPath.Elements)
+        private void ProcessProtoFluxTypes()
         {
-            AddProtoFluxTypeInfo(protoFluxTypeInfoList, node, ProtofluxString, -1, seenOverloads, "ProtoFlux");
+            StringBuilder ProtofluxString = new StringBuilder();
+            CategoryNode<Type> ProtofluxPath = WorkerInitializer.ComponentLibrary.GetSubcategory("ProtoFlux");
+
+            foreach (CategoryNode<Type> node in ProtofluxPath.Subcategories)
+            {
+                ProcessNode(node, ProtofluxString, 0);
+            }
+
+            HashSet<string> seenOverloads = new HashSet<string>();
+            foreach (Type node in ProtofluxPath.Elements)
+            {
+                AddProtoFluxTypeInfo(node, ProtofluxString, -1, seenOverloads, "ProtoFlux");
+            }
+
+            Console.WriteLine($"Loaded {protoFluxTypeInfoList.Count} ProtoFlux types.");
         }
 
-        int protoFluxTypesCount = protoFluxTypeInfoList.Count();
-        Console.WriteLine($"Loaded {protoFluxTypesCount} ProtoFlux types.");
+        private void ProcessNode(CategoryNode<Type> node, StringBuilder builder, int depth, string parentCategoryPath = "")
+        {
+            string currentCategoryPath = $"{parentCategoryPath}{(parentCategoryPath == "" ? "" : "/")}{node.Name}";
 
-        // Add support for serialization of complex types such as List<string>
-        var options = new JsonSerializerOptions { WriteIndented = true, IncludeFields = true };
+            foreach (CategoryNode<Type> subdir in node.Subcategories)
+            {
+                ProcessNode(subdir, builder, depth + 1, currentCategoryPath);
+            }
 
-        string json = JsonSerializer.Serialize(protoFluxTypeInfoList, options);
+            HashSet<string> seenOverloads = new HashSet<string>();
+            foreach (Type element in node.Elements)
+            {
+                AddProtoFluxTypeInfo(element, builder, depth, seenOverloads, currentCategoryPath);
+            }
+        }
 
-        string outputFolder = args.Length > 0 ? args[0] : "../../../data/";
-        EnsureDirectoryExists(outputFolder);
+        private void AddProtoFluxTypeInfo(Type element, StringBuilder builder, int depth, HashSet<string> seenOverloads, string currentCategoryPath)
+        {
+            string adjustedCategoryPath = currentCategoryPath.StartsWith("Runtimes/Execution/") ? currentCategoryPath.Substring("Runtimes/Execution/".Length) : currentCategoryPath;
+            ProtoFluxTypeInfo protoFluxTypeInfo = CreateProtoFluxTypeInfo(element, adjustedCategoryPath);
 
-        string filePath = Path.Combine(outputFolder, "ProtoFluxTypes_new.json");
-        await File.WriteAllTextAsync(filePath, json);
+            if (protoFluxTypeInfo.ParameterCount > MAX_PARAMETERS) return;
+            protoFluxTypeInfoList.Add(protoFluxTypeInfo);
+        }
 
-        Console.WriteLine($"ProtoFlux data saved to {filePath}");
+        private ProtoFluxTypeInfo CreateProtoFluxTypeInfo(Type element, string adjustedCategoryPath)
+        {
+            return new ProtoFluxTypeInfo
+            {
+                FullName = element.FullName,
+                NiceName = element.GetNiceName(),
+                NiceCategory = adjustedCategoryPath
+            };
+        }
+
+        public async Task SaveProtoFluxTypeInfo(string outputFolder)
+        {
+            EnsureDirectoryExists(outputFolder);
+
+            var options = new JsonSerializerOptions { WriteIndented = true, IncludeFields = true };
+            string json = JsonSerializer.Serialize(protoFluxTypeInfoList, options);
+
+            string filePath = Path.Combine(outputFolder, "ProtoFluxTypes_new.json");
+            await File.WriteAllTextAsync(filePath, json);
+
+            Console.WriteLine($"ProtoFlux data saved to {filePath}");
+        }
+
+        private void EnsureDirectoryExists(string path)
+        {
+            if (!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
+            }
+        }
     }
 }
+
 
 
 
