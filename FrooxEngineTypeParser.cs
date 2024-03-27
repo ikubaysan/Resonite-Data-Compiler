@@ -7,6 +7,7 @@ using System.Text.Json;
 
 internal class Program
 {
+    const int MAX_PARAMETERS = 1;
     const char SEPARATOR = '#';
 
     static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
@@ -33,6 +34,8 @@ internal class Program
     // Pass the current category path as an additional argument.
     public static void PrintComp(List<ProtoFluxTypeInfo> protoFluxTypeInfoList, Type element, StringBuilder builder, int depth, HashSet<string> seenOverloads, string currentCategoryPath)
     {
+        // Adjust currentCategoryPath if it starts with "Runtimes/Execution/" - remove this prefix.
+        string adjustedCategoryPath = currentCategoryPath.StartsWith("Runtimes/Execution/") ? currentCategoryPath.Substring("Runtimes/Execution/".Length) : currentCategoryPath;
         ProtoFluxTypeInfo protoFluxTypeInfo;
 
         if (typeof(ProtoFluxNode).IsAssignableFrom(element))
@@ -45,15 +48,17 @@ internal class Program
                     + SEPARATOR
                     + toPrint.FullName
                     + SEPARATOR // Append the category path.
-                    + currentCategoryPath // Append the current category path here.
+                    + adjustedCategoryPath // Append the current category path here.
             );
 
             protoFluxTypeInfo = new ProtoFluxTypeInfo
             {
                 FullName = toPrint.FullName,
                 NiceName = toPrint.GetNiceName(),
-                NiceCategory = currentCategoryPath
+                NiceCategory = adjustedCategoryPath
             };
+
+            if (protoFluxTypeInfo.ParameterCount > MAX_PARAMETERS) return;
             protoFluxTypeInfoList.Add(protoFluxTypeInfo);
 
             return;
@@ -65,16 +70,17 @@ internal class Program
                 + SEPARATOR
                 + element.FullName
                 + SEPARATOR // Append the category path.
-                + currentCategoryPath // Append the current category path here.
+                + adjustedCategoryPath // Append the current category path here.
         );
-
 
         protoFluxTypeInfo = new ProtoFluxTypeInfo
         {
             FullName = element.FullName,
             NiceName = element.GetNiceName(),
-            NiceCategory = currentCategoryPath
+            NiceCategory = adjustedCategoryPath
         };
+
+        if (protoFluxTypeInfo.ParameterCount > MAX_PARAMETERS) return;
         protoFluxTypeInfoList.Add(protoFluxTypeInfo);
 
     }
